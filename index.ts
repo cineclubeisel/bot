@@ -1,4 +1,5 @@
 import { Channel, ChannelType, Client, EmbedBuilder, GatewayIntentBits, GuildBasedChannel, NewsChannel, Partials, SendableChannels, Snowflake, TextBasedChannel, TextChannel } from 'discord.js'
+import storage from './storage'
 
 interface Channels {
     novidades: NewsChannel
@@ -60,76 +61,85 @@ bot.on('clientReady', async ()=>{
 
 bot.on('guildMemberAdd', async member=>{
     if(member.guild.id !== GUILD_ID) return
-    await channels.updates.send(`<:enter:1549787187350863964> ${member} juntou-se ao servidor`)
+
+    await storage.read()
+    const now = Date.now()
+
+    const activeDbInvites = storage.data.invites.filter(i => i.expiresAt > now)
+    const currInvites = (await member.guild.invites.fetch({ channelId: channels.geral.id }))
+        .map(i => i.url)
+    
+    const missingInvites = activeDbInvites.filter(i => !currInvites.includes(i.url))
+
+    let error = ''
+    if (missingInvites.length === 1) {
+        try {
+            await member.setNickname(missingInvites[0].name)
+        } catch (err) {
+            console.error(`Failed to set nickname for ${member.id}:`, err)
+        }
+    } else if (missingInvites.length > 1) {
+        error = '\nMais do que um dos meus convites foram usados. Não sei de qual deles veio.'
+    } else {
+        error = '\nProvavelmente entrou com um convite que não era meu.'
+    }
+
+    const missingUrls = new Set(missingInvites.map(i => i.url))
+    await storage.update(db => {
+        db.invites = db.invites.filter(i => i.expiresAt > now && !missingUrls.has(i.url))
+    })
+
+    await channels.updates.send(`<:enter:1549787187350863964> ${member} juntou-se ao servidor${error}`)
     await member.roles.add(MEMBER_ROLE_ID)
 })
 
 bot.on('guildMemberRemove', async member=>{
     if(member.guild.id !== GUILD_ID) return
-    channels.updates.send(`<:leave:1549787189250891877> ${member.displayName} saiu do servidor`)
+    await channels.updates.send(`<:leave:1549787189250891877> ${member.displayName} saiu do servidor`)
 })
 
 bot.on('messageCreate', async msg=>{
     if(msg.author.id === bot.user?.id) return
 
-    if(msg.content == '!invite' && msg.channel.id === channels.direcao.id && msg.author.id === BERNZRDO_ID){
-        
-        const invite = await channels.geral.createInvite({
-            maxAge: 48 * 60 * 60, // 48h
-            maxUses: 1
-        })
+    // bernzrdo
+    if(msg.author.id === BERNZRDO_ID){
 
-        const inviteMsg = await msg.channel.send(`Olá, nome! O Cineclube ISEL dá-te as boas-vindas. :)
+        if(msg.content.startsWith('!invite')){
+
+            await msg.delete()
+
+            const name = msg.content.substring('!invite '.length)
+
+            if(!name){
+                const reply = await msg.channel.send('falta o nome da pessoa...')
+                setTimeout(()=>reply.delete(), 3e3)
+                return
+            }
+
+            const maxAge = 48 * 60 * 60
+
+            const invite = await channels.geral.createInvite({ maxAge, maxUses: 1 })
+
+            await storage.update(({ invites }) => invites.push({
+                name: name,
+                url: invite.url,
+                expiresAt: Date.now() + (maxAge * 1e3)
+            }))
+
+            const inviteMsg = await msg.channel.send(`Olá, ${name.split(' ')[0]}! O Cineclube ISEL dá-te as boas-vindas. :)
 
 Junta-te ao nosso servidor de Discord para poderes participar na nossa comunidade.
-${invite} (link válido por 48h)
+${invite.url} (link válido por 48h)
 
 Com os melhores cumprimentos,
 Bernardo Silva
 Presidente @ Cineclube ISEL`)
-        
-        await msg.delete()
 
-        setTimeout(()=>inviteMsg.delete(), 10e3)
-        
-    }
-
-//     if(msg.content == 'vote' && msg.channel.type == ChannelType.GuildText){
-//         await msg.delete()
-//         await msg.channel.send({
-//             files: [join(__dirname, 'image.png')]
-//         })
-//         await msg.channel.send({
-//             content: `# Vota no filme da 1.ª sessão
-// * [Tudo Sobre a Minha Mãe (1999)](https://letterboxd.com/film/all-about-my-mother/)
-// * [O Fabuloso Destino de Amélie (2001)](https://letterboxd.com/film/amelie/)
-// * [Blue Valentine - Só Tu e Eu (2010)](https://letterboxd.com/film/blue-valentine/)
-// * [O Clube de Dallas (2013)](https://letterboxd.com/film/dallas-buyers-club/)
-// * [Forrest Gump (1994)](https://letterboxd.com/film/forrest-gump/)`
-//         })
-//         await msg.channel.send({
-//             poll: {
-//                 question: {
-//                     text: 'Vota no filme da 1.ª sessão'
-//                 },
-//                 answers: [
-//                     { text: 'Tudo Sobre a Minha Mãe (1999)' },
-//                     { text: 'O Fabuloso Destino de Amélie (2001)' },
-//                     { text: 'Blue Valentine - Só Tu e Eu (2010)' },
-//                     { text: 'O Clube de Dallas (2013)' },
-//                     { text: 'Forrest Gump (1994)' }
-//                 ],
-//                 duration: 242,
-//                 allowMultiselect: false
-//             }
-//         })
-//     }
-//     if(msg.content == 'invite' && msg.channel.type == ChannelType.GuildText){
-//         msg.channel.createInvite({
-//             maxAge: 0,
+            setTimeout(()=>inviteMsg.delete(), 10e3)
             
-//         })
-//     }
+        }
+
+    }
 
 })
 
