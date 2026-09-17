@@ -118,7 +118,11 @@ bot.on('messageCreate', async msg=>{
 
             const maxAge = 48 * 60 * 60
 
-            const invite = await channels.geral.createInvite({ maxAge, maxUses: 1 })
+            const invite = await channels.geral.createInvite({
+                maxAge,
+                maxUses: 1,
+                unique: true
+            })
 
             await storage.update(({ invites }) => invites.push({
                 name: name,
