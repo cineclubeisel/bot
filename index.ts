@@ -1,20 +1,32 @@
-import { Channel, ChannelType, Client, EmbedBuilder, GatewayIntentBits, GuildBasedChannel, NewsChannel, Partials, SendableChannels, Snowflake, TextBasedChannel } from 'discord.js'
+import { Channel, ChannelType, Client, EmbedBuilder, GatewayIntentBits, GuildBasedChannel, NewsChannel, Partials, SendableChannels, Snowflake, TextBasedChannel, TextChannel } from 'discord.js'
 
 interface Channels {
     novidades: NewsChannel
-    updates: SendableChannels
+    geral: TextChannel
+    direcao: TextChannel
+    updates: TextChannel
 }
 
 const GUILD_ID = '1549437865249869904'
+const MEMBER_ROLE_ID = '1549478403000762448'
+const BERNZRDO_ID = '412393476378853376'
 
 const CHANNEL_INFO: Record<keyof Channels, { id: Snowflake, typeCheck: (c: Channel) => boolean }> = {
     novidades: {
         id: '1549519556375089182',
         typeCheck: c => c.type === ChannelType.GuildAnnouncement
     },
+    geral: {
+        id: '1549482743493169272',
+        typeCheck: c => c.type === ChannelType.GuildText
+    },
+    direcao: {
+        id: '1549518750133387284',
+        typeCheck: c => c.type === ChannelType.GuildText
+    },
     updates: {
         id: '1549518770232361030',
-        typeCheck: c => c.isSendable()
+        typeCheck: c => c.type === ChannelType.GuildText
     }
 }
 
@@ -46,18 +58,41 @@ bot.on('clientReady', async ()=>{
     console.log('Ready!')
 })
 
-bot.on('guildMemberAdd', member=>{
+bot.on('guildMemberAdd', async member=>{
     if(member.guild.id !== GUILD_ID) return
-    channels.updates.send(`<:enter:1549787187350863964> ${member} juntou-se ao servidor`)
+    await channels.updates.send(`<:enter:1549787187350863964> ${member} juntou-se ao servidor`)
+    await member.roles.add(MEMBER_ROLE_ID)
 })
 
-bot.on('guildMemberRemove', member=>{
+bot.on('guildMemberRemove', async member=>{
     if(member.guild.id !== GUILD_ID) return
     channels.updates.send(`<:leave:1549787189250891877> ${member.displayName} saiu do servidor`)
 })
 
-// bot.on('messageCreate', async msg=>{
-//     if(msg.author.id === bot.user?.id) return
+bot.on('messageCreate', async msg=>{
+    if(msg.author.id === bot.user?.id) return
+
+    if(msg.content == '!invite' && msg.channel.id === channels.direcao.id && msg.author.id === BERNZRDO_ID){
+        
+        const invite = await channels.geral.createInvite({
+            maxAge: 48 * 60 * 60, // 48h
+            maxUses: 1
+        })
+
+        const inviteMsg = await msg.channel.send(`Olá, nome! O Cineclube ISEL dá-te as boas-vindas. :)
+
+Junta-te ao nosso servidor de Discord para poderes participar na nossa comunidade.
+${invite} (link válido por 48h)
+
+Com os melhores cumprimentos,
+Bernardo Silva
+Presidente @ Cineclube ISEL`)
+        
+        await msg.delete()
+
+        setTimeout(()=>inviteMsg.delete(), 60e3)
+        
+    }
 
 //     if(msg.content == 'vote' && msg.channel.type == ChannelType.GuildText){
 //         await msg.delete()
@@ -96,6 +131,6 @@ bot.on('guildMemberRemove', member=>{
 //         })
 //     }
 
-// })
+})
 
 bot.login(process.env.TOKEN)
