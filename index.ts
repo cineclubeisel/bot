@@ -90,7 +90,7 @@ Presidente @ Cineclube ISEL`)
         
         await msg.delete()
 
-        setTimeout(()=>inviteMsg.delete(), 60e3)
+        setTimeout(()=>inviteMsg.delete(), 10e3)
         
     }
 
